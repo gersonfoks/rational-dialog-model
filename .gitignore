@@ -140,3 +140,7 @@ finetuning/saved_models
 
 todo.md
 .DS_store
+
+analysis
+final_models/dialoGPT_dailyDialog_finetuned.pt
+final_models/roberta-daily_dialog.pt

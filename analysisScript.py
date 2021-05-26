@@ -23,14 +23,19 @@
 #First we fix the relative imports
 import os
 import sys
+import argparse
 
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--config', type=str)
+args = parser.parse_args()
 
 # In[2]:
 
 
 ### We load the models based on the configs for analysis. 
 from utils.analysis import parse_config_for_analysis
-config_path = 'configs/dialoGPT_REINFORCE_dailyDialog.yml'
+config_path = args.config #'configs/dialoGPT_REINFORCE_dailyDialog.yml'
 
 loaded_info = parse_config_for_analysis(config_path)
 
@@ -53,7 +58,7 @@ dataloader_test = loaded_info["dataloader_test"]
 from utils.analysis import get_results, get_results_RE
 
 
-lm_RE_result = get_results_RE(lm_RE, dataloader_test, 1) #TODO change to 5
+lm_RE_result = get_results_RE(lm_RE, dataloader_test, 5)
 lm_result = get_results(lm, dataloader_test)
 print(lm_RE_result)
 print(lm_result)

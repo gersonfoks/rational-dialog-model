@@ -1,4 +1,4 @@
-#push to lisa: rsync -av . lcur0343@lisa.surfsara.nl:~/rational-dialog-model
+#push to lisa: rsync -av --exclude '.git' . lcur0343@lisa.surfsara.nl:~/rational-dialog-model
 #pull RUNS from lisa: rsync -av lcur0343@lisa.surfsara.nl:~/rational-dialog-model/runs .
 #pull LOGS from lisa: rsync -av lcur0343@lisa.surfsara.nl:~/rational-dialog-model/logs .
 #pull models from lisa: rsync -av lcur0343@lisa.surfsara.nl:~/rational-dialog-model/finetuning/saved_models finetuning/
