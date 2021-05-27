@@ -43,8 +43,12 @@ class LightingReinforceRationalizedLanguageModel(pl.LightningModule):
         prediction = self.forward_masked_input(masked_input, targets)
         return {"logits": prediction, **rational, "x": x}
 
-    def get_rational(self, x):
-        return self.rational_extractor(x)
+    def get_rational(self, x, greedy=False):
+        if greedy:
+            print(greedy)
+            return self.rational_extractor(x, greedy=greedy)
+        else:
+            return self.rational_extractor(x)
 
     def forward_masked_input(self, masked_input, targets):
         ## Concatenate the two together and put through the lstm

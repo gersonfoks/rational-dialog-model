@@ -159,13 +159,13 @@ class LightingBaseRationalizedLanguageModel(pl.LightningModule):
                 rationals.append(torch.tensor([]))
                 embedding = self.language_model.to_embedding(dialogue_tokens_ids_tensor)
 
-            next_ids = self.language_model.generate_next_tokens_from_embedding(embedding, n_tokens=n_rational)
+            next_utterance = self.language_model.generate_next_utterance_from_embedding(embedding, get_token_id(self.tokenizer, "sep_token"))
 
-            dialogue_tokens += next_ids
+            dialogue_tokens += next_utterance
             # dialogue_tokens = torch.cat([dialogue_tokens, next_ids])
             # dialogue_tokens.append(next_ids)
             sentences.append(
-                self.tokenizer.decode(next_ids, skip_special_tokens=False).replace(" #", "").replace("#", ""))
+                self.tokenizer.decode(next_utterance, skip_special_tokens=False).replace(" #", "").replace("#", ""))
             dialogue_tokens_ids_tensor = torch.tensor(dialogue_tokens).to(self.device).unsqueeze(1)
 
         sentence = self.tokenizer.decode(dialogue_tokens, skip_special_tokens=False).replace(" #", "").replace("#", "")

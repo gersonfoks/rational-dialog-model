@@ -1,0 +1,41 @@
+language_model:
+  type: LSTM
+  pretrained: True
+  embedding_dim: 128
+  num_layers: 2
+  hidden_state_size: 128
+  load_location: './models/small_lm.pt'
+  save_location: './models/small_lm_token_random_25_rationalized.pt'
+dataset:
+  type: 'daily_dialogue'
+  size_train: 10000
+  size_test: 10000
+  batch_size: 32
+  subsets: start
+  remove_top_n: 0
+  max_length: 200
+tokenizer:
+  type: 'daily_dialogue'
+  link: './daily_dialog/tokenizer.json'
+hparams:
+  learning_rate: 0.0001
+  freeze_language_model: False
+loss_module: crossentropyloss
+trainer:
+  type: policy #Type of the pytorch lighntning model we are training.
+  max_epochs: 50
+  log_every_n_steps: 1
+rational_extractor:
+  type: policy_based_random
+  pretrained: False
+  percentage: 0.25
+  save_location: './models/policy_token_random_25.pt'
+  load_location: './models/policy_token_random_25.pt'
+  parameters:
+    fussed_lasso_weight: 0
+    sparsity_weight: 0
+
+
+
+
+

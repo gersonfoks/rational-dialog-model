@@ -92,6 +92,35 @@ class LSTMLanguageModel(BaseLanguageModel):
 
         return tokens
 
+    def generate_next_utterance_from_embedding(self, embedding, sep_token, max_length=100,):
+        assert (type(sep_token) == int)
+        ## Initialize:
+        tokens = []
+        embedding = embedding.clone()
+        # Get the latest token
+        out, hidden = self.lstm(embedding)
+        out = F.relu(out[-1, 0])
+
+        logits = self.classification_layer(out)
+        next_token = self.get_next_token_from_logits(logits)
+
+        tokens.append(next_token)
+        next_token_tensor = torch.tensor([[next_token]]).to(embedding.device)
+        next_embedding = self.embedding(next_token_tensor)
+
+        while len(tokens) < max_length and next_token != sep_token:
+            next_embedding = next_embedding.reshape(1, 1, -1)
+            out, hidden = self.lstm(next_embedding, hidden)
+            out = F.relu(out)
+            logits = self.classification_layer(out)
+
+            next_token = self.get_next_token_from_logits(logits)
+
+            tokens.append(next_token)
+            next_token_tensor = torch.tensor([[next_token]]).to(embedding.device)
+            next_embedding = self.embedding(next_token_tensor)
+
+        return tokens
 
     def generate_next_token(self, tokens):
         tokens = tokens.view(-1, 1)

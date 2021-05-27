@@ -8,11 +8,12 @@ language_model:
   save_location: './models/small_lm_shared_kum_rationalized.pt'
 dataset:
   type: 'daily_dialogue'
-  size_train: 100
-  size_test: 50
+  size_train: 10000
+  size_test: 10000
   batch_size: 32
   subsets: start
-  remove_top_n: 20
+  remove_top_n: 0
+  max_length: 200
 tokenizer:
   type: 'daily_dialogue'
   link: './daily_dialog/tokenizer.json'

@@ -8,6 +8,8 @@ from tokenizers import Tokenizer, normalizers
 from tokenizers.models import WordPiece
 from tokenizers.normalizers import Lowercase, NFD, StripAccents
 from tokenizers.trainers import WordPieceTrainer
+
+from utils import token_utils
 from utils.token_utils import special_tokens
 
 

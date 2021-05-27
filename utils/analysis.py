@@ -32,7 +32,7 @@ def parse_config_for_analysis(config_ref):
     # First we load the tokenizer and the dataset
     tokenizer = get_tokenizer(config["tokenizer"])
     result["tokenizer"] = tokenizer
-    datasets = get_datasets(config["dataset"], tokenizer)
+    datasets = get_datasets(config["dataset"], tokenizer, load_train=False)
     result = {**result, **datasets}
 
     # Get language model
@@ -54,7 +54,7 @@ def parse_config_for_analysis(config_ref):
     hparams = config["hparams"]
     result["hparams"] = hparams
 
-    if config['rational_extractor']['type'] == 'policy_based':
+    if "policy" in config['rational_extractor']['type']:
         lightning_language_model_RE = LightingReinforceRationalizedLanguageModel(language_model_RE, RE, tokenizer,
                                                                               hparams=hparams,
                                                                               **config["rational_extractor"][
@@ -82,17 +82,16 @@ def get_results(model, dataloader):
     mean_mask_percentage = 0
     total_samples = len(dataloader.dataset)
     for batch in tqdm(dataloader):
-
         contexts = batch[0].to(model.device)
         targets =  batch[1].to(model.device)
         results = model.batch_to_out((contexts, targets))
         samples_in_batch = batch[0].shape[0]
-        mean_acc += results["acc"] * (samples_in_batch) / total_samples
+        mean_acc += results["acc"].item() * (samples_in_batch) / total_samples
 
         if "mask_mean" in results.keys():
-            mean_mask_percentage += results["mask_mean"] * (samples_in_batch) / total_samples
+            mean_mask_percentage += results["mask_mean"].item() * (samples_in_batch) / total_samples
 
-        mean_perplexity += results["perplexity"] * (samples_in_batch) / total_samples
+        mean_perplexity += results["perplexity"].item() * (samples_in_batch) / total_samples
     return {"mean_acc": mean_acc, "mean_perplexity": mean_perplexity, "mean_mask_percentage": mean_mask_percentage}
 
 
@@ -106,7 +105,7 @@ def get_results_RE(model, dataloader, n_experiments):
     for i in range(n_experiments):
         total_results.append(get_results(model, dataloader))
     for key in total_results[0].keys():
-        all_values = [r[key].item() for r in total_results]
+        all_values = [r[key] for r in total_results]
         results[key] = {"mean": np.mean(all_values), "std": np.std(all_values)}
     return results
 
@@ -117,7 +116,7 @@ def calc_change_in_perplexity_experiment(model, dataloader, n_experiments=2, n_e
     for i in range(n_experiments):
         total_results.append(calc_change_in_perplexity(model, dataloader, n_extra_mask=n_extra_mask))
     for key in total_results[0].keys():
-        all_values = [r[key].item() for r in total_results]
+        all_values = [r[key] for r in total_results]
         results[key] = {"mean": np.mean(all_values), "std": np.std(all_values)}
     return results
 
@@ -128,10 +127,9 @@ def calc_change_in_perplexity(model, dataloader, n_extra_mask=1):
 
     for (contexts, targets) in dataloader:
         # Make batch second
-        contexts = contexts.permute(1, 0, )
-        targets = targets.permute(1, 0, )
+        contexts = contexts.permute(1, 0, ).to(model.device)
+        targets = targets.permute(1, 0, ).to(model.device)
         n_targets = targets.shape[0]
-
         # Get the rational
         rational = model.get_rational(contexts)
 
@@ -182,8 +180,8 @@ def mask_extra(masked_input, n_extra_mask, mask_token_id):
     return result
 
 
-def rational_analysis(model, dataloader):
-    n = 0
+def rational_analysis(model, dataloader, greedy=False):
+    n = 1
     abs_averages = 0.0
     rel_averages = 0.0
     ## We also want to keep track of the distribution
@@ -192,36 +190,74 @@ def rational_analysis(model, dataloader):
 
     for (contexts, _) in dataloader:
         # This assumes a batch consists of a list of (context, response) pairs
-        contexts = contexts.to(model.device)
+        contexts = contexts.permute(1,0).to(model.device)
+
         #                print("Context: ", context)
 
         # Get the mask
-        rational = model.get_rational(contexts)
-        mask = ~rational["mask"]
+        if greedy:
+            rational = model.get_rational(contexts, greedy=greedy)
+        else:
+            rational = model.get_rational(contexts)
+        mask = rational["mask"]
 
         #                print("Mask: ", mask, mask.size(), len(mask[0]))
-        num_positions = len(mask[0])
-        positions_reversed = torch.tensor(list(range(num_positions, 0, -1))).to(model.device)
-        #                print(positions_reversed)
-
-        mask_positions = torch.mul(mask, positions_reversed).float()
-        #                print("Positions: ", mask_positions)
-
-        abs_pos_count += Counter(list(mask_positions.flatten().detach().cpu().numpy()))
-        rel_pos_count += Counter(list(( 10*torch.round(10 * mask_positions/ num_positions)).flatten().detach().cpu().numpy()))
-        average_absolute = mask_positions.sum(dim=1) / mask.sum(dim=1)
-        average_relative = average_absolute / num_positions
+        pad_id = get_token_id(model.tokenizer, "pad_token")
+        abs_pos_count_batch, rel_pos_count_batch = get_abs_and_relative_positions(mask, contexts, pad_id=pad_id)
+        abs_pos_count += abs_pos_count_batch
+        rel_pos_count += rel_pos_count_batch
 
 
         # print("Average absolute: ", average_absolute)
         # print("Average relative: ", average_relative)
-        abs_averages += torch.sum(average_absolute)
-        rel_averages += torch.sum(average_relative)
-        n += len(contexts)
     abs_average = abs_averages / n
     rel_average = rel_averages / n
     return {"abs_average": abs_average, "rel_average": rel_average, "abs_pos_count": abs_pos_count , "rel_pos_count": rel_pos_count}
 
+
+def get_abs_and_relative_positions(mask, tokens, pad_id, batch_first=False):
+
+    #Make batch first:
+    if not batch_first:
+        mask = mask.permute(1,0)
+        tokens = tokens.permute(1,0)
+
+    non_paddings = (tokens != pad_id).bool()
+    lengths = non_paddings.sum(dim=-1)
+
+    length_copy = list(lengths.detach().cpu().numpy())
+    mask = non_paddings * mask
+
+
+
+    reverse_positions =  torch.tensor(list(range(mask.shape[1], 0, -1))).to(mask.device)
+
+
+
+
+    mask_positions = torch.mul(mask, reverse_positions).float()
+    #                print("Positions: ", mask_positions)
+
+
+    lengths = lengths.reshape(-1, 1).repeat(1, mask_positions.shape[1])
+    abs_pos = mask_positions.detach().cpu().numpy()
+
+    rel_positions = (10 * torch.round(10 * (1/lengths) * mask_positions )).detach().cpu().numpy()
+
+    mask = mask.detach().cpu().numpy()
+    abs_pos = flatten([list([ p for p, keep in zip(pos[-l:], m[-l: ]) if keep ])for pos,m,  l in zip(abs_pos, mask,  length_copy)])
+    rel_positions = flatten([list([ p for p, keep in zip(pos[-l:], m[-l: ]) if keep ])for pos,m,  l in zip(rel_positions, mask,  length_copy)])
+
+    abs_pos_count = Counter(list(abs_pos))
+    rel_pos_count = Counter(rel_positions)
+
+    return abs_pos_count, rel_pos_count,
+
+def flatten(l):
+    result = []
+    for r in l:
+        result += r
+    return result
 
 def pretty_print_completed_dialogues(completed_dialogues):
     print("context ----> response")

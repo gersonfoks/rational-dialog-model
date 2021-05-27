@@ -7,15 +7,20 @@ import random
 from tokenizers import Tokenizer
 from utils.token_utils import special_tokens, get_token, get_token_id
 
+
 class UtterancesDataset(Dataset):
 
-    def __init__(self, tokenizer, size=None, subsets="start", perturbation=None, split="train", remove_top_n=-1):
+    def __init__(self, tokenizer, size=None, subsets="start", perturbation=None, split="train", remove_top_n=-1,
+                 shuffle=True, max_length=0):
         '''
         remove_top_n: is used to remove the longest samples from the dataset (to prevent memory problems)
         size: is used to restrict the number of dialogues that is used
         '''
         assert subsets in ["start", "end", "single", "full"], "subsets should be 'start', 'end', 'single, or 'full'"
         assert perturbation in [None, "utterance_dialogue", "words_dialogue", "words_utterance"]
+        self.shuffle = shuffle
+        self.max_length = max_length
+        print(self.max_length)
         self.original_dataset = datasets.load_dataset("daily_dialog", split=split, )
         self.dialogues = [item["dialog"] for item in self.original_dataset]
         self.size = len(self.dialogues)
@@ -26,7 +31,7 @@ class UtterancesDataset(Dataset):
         self.subsets = subsets
         self.remove_top_n = remove_top_n
         self.dataset = self.process_dataset(subsets, perturbation)
-       
+
 
     def process_dataset(self, subsets, perturbation):
         '''
@@ -50,25 +55,32 @@ class UtterancesDataset(Dataset):
             sep_token = get_token(self.tokenizer, "sep_token")
             tokenized_samples = [
                 (self.tokenizer.encode((sep_token).join(context) + sep_token).ids,
-                self.tokenizer.encode(response + sep_token).ids)
+                 self.tokenizer.encode(response + sep_token).ids)
                 for (context, response) in perturbed_samples
             ]
         else:
 
             # For the other models, the encode function already gives the id's
-            self.tokenizer.add_special_tokens({'sep_token': "[SEP]",'pad_token': "[PAD]", 'mask_token': "[MASK]", 'eos_token': "[EOS]"})
+            self.tokenizer.add_special_tokens(
+                {'sep_token': "[SEP]", 'pad_token': "[PAD]", 'mask_token': "[MASK]", 'eos_token': "[EOS]"})
             sep_token = self.tokenizer.sep_token
             tokenized_samples = [
                 (self.tokenizer.encode((sep_token).join(context) + sep_token),
-                self.tokenizer.encode(response + sep_token))
+                 self.tokenizer.encode(response + sep_token))
                 for (context, response) in perturbed_samples
             ]
 
         # Now shuffle samples and sort on length (to prevent amount of padding in batches)
-        random.shuffle(tokenized_samples)
-        sorted_samples = sorted(tokenized_samples, key=lambda x: len(x[0]) * 10 + len(x[1]) + random.randint(0, 10))
+        if self.max_length > 0:
+            tokenized_samples = [(x,y) for (x,y) in tokenized_samples if len(x)  + len(y) < self.max_length]
+        if self.shuffle:
+            random.shuffle(tokenized_samples)
+        sorted_samples = sorted(tokenized_samples, key=lambda x: len(x[0]) * 10 + len(x[1]) + self.shuffle * random.randint(0, 10))
+
         if self.remove_top_n > 0:
             sorted_samples = sorted_samples[:int(-1 * self.remove_top_n)]
+
+
         return sorted_samples
 
     def perturb_dataset(self, samples, perturbation):
@@ -167,7 +179,8 @@ class UtterancesDataset(Dataset):
         self.dataset = sorted(self.dataset, key=lambda x: len(x[0]) * 10 + len(x[1]) + random.randint(0, 10))
 
     @staticmethod
-    def get_collate_fn(padding_value=None): # make sure you provide the right id from the tokenizer, when get_collate_fn is called
+    def get_collate_fn(
+            padding_value=None):  # make sure you provide the right id from the tokenizer, when get_collate_fn is called
         def collate_fn(items):
             '''
             Pads the context from the left and the response from the right.
