@@ -144,3 +144,7 @@ todo.md
 analysis
 final_models/dialoGPT_dailyDialog_finetuned.pt
 final_models/roberta-daily_dialog.pt
+models/RE_REINFORCE_dialoGPT.pt
+models/RE_REINFORCE_roberta.pt
+models/dialoGPT_dailyDialog_finetuned
+models/REINFORCE_dialoGPT.pt
