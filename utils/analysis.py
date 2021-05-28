@@ -18,6 +18,8 @@ from utils.parse_config import get_tokenizer, get_datasets, get_language_model, 
 from utils.token_utils import get_token_id
 from utils.utils import calc_perplexity
 
+import matplotlib.pyplot as plt
+
 
 def parse_config_for_analysis(config_ref):
     with open(config_ref, 'r') as f:
@@ -266,3 +268,37 @@ def pretty_print_completed_dialogues(completed_dialogues):
         for rational, out in zip(dialogue["rationalized_input"], dialogue["response"]):
             print(rational, '------>', out)
 
+
+import json
+import pandas as pd
+from os import path
+def add_distribution_to_file(distribution, name, file):
+
+    if not path.exists(file):
+        with open(file, "w") as f:
+            pass
+    with open(file, "r") as f:
+        if len(f.read()) == 0:
+            print("empty")
+            df = pd.DataFrame()
+            df["percentages"] = [i* 10 for i in range( len(distribution.values()))]
+            df[name] = list(distribution.values())
+        else:
+            df = pd.read_csv(file,  index_col=0)
+
+            df[name] = list(distribution.values())
+            print(df)
+    df.to_csv(file)
+    return df
+
+
+def prepare_rel_pos_count(rel_pos_count):
+    total = sum(rel_pos_count.values())
+    info = {key: value/total for key, value in sorted(rel_pos_count.items(), key=lambda x: x[0])}
+    return info
+
+
+def plot_rel_pos(file):
+    df = pd.read_csv(file, index_col=0)
+    df.plot(x="percentages", xlabel="Relative Distance", ylabel="percentage")
+    plt.show()

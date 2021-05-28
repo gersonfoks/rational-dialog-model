@@ -1,0 +1,2 @@
+freeze_language_model: false
+learning_rate: 0.0001
